@@ -16,11 +16,64 @@ from io import StringIO
 from confluent_kafka import KafkaError, Producer
 import numpy as np
 
-@op(required_resource_keys={"kafka_consumer"}, 
-    out={"result": Out()})
+# @op(required_resource_keys={"kafka_consumer"}, 
+#     out={"result": Out()})
 
+# def consume_messages(context, max_messages: int = 100, duration_seconds: int = 60):
+#     kafka_consumer = context.resources.kafka_consumer
+#     messages_received = 0
+#     messages = []
+#     start_time = time.time()
+    
+#     while messages_received < max_messages and time.time() - start_time <= duration_seconds:
+#         try:
+#             # Poll for messages
+#             msg = kafka_consumer.poll(timeout=1.0)
+#             if msg is None:
+#                 continue
+#             if msg.error():
+#                 if msg.error().code() == KafkaError._PARTITION_EOF:
+#                     # End of partition
+#                     continue
+#                 else:
+#                     context.log.error(f"Kafka error: {msg.error()}")
+#                     break
+
+#             # Process message
+#             message_content = msg.value().decode('utf-8')  # Decode message value
+#             context.log.info(f"Received message: {message_content}")
+#             messages.append(message_content)
+#             messages_received += 1
+
+#         except Exception as e:
+#             context.log.error(f"Error while consuming message: {e}")
+#             # Optionally handle the error or break out of the loop
+        
+#     return messages
+
+def create_kafka_consumer():
+    # Kafka Consumer Configuration
+    bootstrap_servers = os.getenv('BOOTSTRAP_SERVERS', 'my-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092')
+    group_id = os.getenv('GROUP_ID', 'my-consumer-group')
+    topic_name = os.getenv('TOPIC_NAME', 'my-topic')
+
+    conf = {
+        'bootstrap.servers': bootstrap_servers,
+        'group.id': group_id,
+        'auto.offset.reset': 'earliest'
+    }
+    
+    try:
+        consumer = Consumer(conf)
+        consumer.subscribe([topic_name])
+        return consumer
+    except Exception as e:
+        raise RuntimeError(f"Failed to create Kafka consumer: {e}")
+
+
+@op
 def consume_messages(context, max_messages: int = 100, duration_seconds: int = 60):
-    kafka_consumer = context.resources.kafka_consumer
+    kafka_consumer = create_kafka_consumer()
     messages_received = 0
     messages = []
     start_time = time.time()
@@ -36,11 +89,10 @@ def consume_messages(context, max_messages: int = 100, duration_seconds: int = 6
                     # End of partition
                     continue
                 else:
-                    # Handle other errors
                     context.log.error(f"Kafka error: {msg.error()}")
                     break
 
-            # Process the message
+            # Process message
             message_content = msg.value().decode('utf-8')  # Decode message value
             context.log.info(f"Received message: {message_content}")
             messages.append(message_content)
@@ -50,8 +102,8 @@ def consume_messages(context, max_messages: int = 100, duration_seconds: int = 6
             context.log.error(f"Error while consuming message: {e}")
             # Optionally handle the error or break out of the loop
         
+    kafka_consumer.close()
     return messages
-
 
 
 
